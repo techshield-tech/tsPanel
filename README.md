@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/techshield-tech/tsPanel?include_prereleases&label=release)](https://github.com/techshield-tech/tsPanel/releases)
 
-tsPanel là panel quản trị máy chủ Linux qua trình duyệt, do TechShield phát triển. Từ một giao diện web bạn quản lý được website (Nginx/OpenResty, PHP), cơ sở dữ liệu, FTP, Docker, SSL, tác vụ định kỳ, file, terminal, giám sát tài nguyên và tường lửa ứng dụng web (WAF). Toàn bộ panel là một file chạy duy nhất.
+tsPanel là panel quản trị máy chủ Linux qua trình duyệt, do [TechShield](https://techshield.vn) phát triển. Từ một giao diện web bạn quản lý được website (Nginx/OpenResty, PHP), cơ sở dữ liệu, FTP, Docker, SSL, tác vụ định kỳ, file, terminal, giám sát tài nguyên và tường lửa ứng dụng web (WAF). Toàn bộ panel là một file chạy duy nhất.
 
 > **Lưu ý:** tsPanel đang ở giai đoạn **beta**. Hãy chạy thử trên máy chủ mới hoặc máy thử nghiệm trước khi dùng cho môi trường production.
 
@@ -261,4 +261,4 @@ sha256sum -c SHA256SUMS --ignore-missing
 
 ---
 
-tsPanel được phát triển bởi **TechShield**.
+tsPanel được phát triển bởi [**TechShield**](https://techshield.vn).
