@@ -587,23 +587,42 @@ finish_fresh_install() {
     exit 1
   fi
 
-  local entrance
+  local entrance entrance_state entrance_path entrance_line
   entrance="$("$WRAPPER_PATH" entrance show 2>&1 || true)"
+  entrance_state="$(printf '%s\n' "$entrance" | sed -n 's/^entrance enforcement: //p' | head -1)"
+  entrance_path="$(printf '%s\n' "$entrance" | sed -n 's/^entrance path: //p' | head -1)"
 
   local public_ip local_ip
   public_ip="$(curl -s4 --max-time 3 https://ifconfig.me 2>/dev/null || true)"
   local_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 
+  entrance_line=""
+  if [ -n "$entrance_path" ]; then
+    if [ "$entrance_state" = "enabled" ]; then
+      if [ -n "$public_ip" ]; then
+        entrance_line="http://${public_ip}:${PORT}${entrance_path}"
+      elif [ -n "$local_ip" ]; then
+        entrance_line="http://${local_ip}:${PORT}${entrance_path}"
+      else
+        entrance_line="$entrance_path"
+      fi
+    elif [ "$entrance_state" = "disabled" ]; then
+      entrance_line="${entrance_path} (not enforced; enable in Settings > Security)"
+    fi
+  fi
+
   printf '\n%s=== tsPanel installed ===%s\n' "$C_GREEN" "$C_RESET"
   if [ -n "$public_ip" ]; then
     printf 'Panel URL:    http://%s:%s/\n' "$public_ip" "$PORT"
   fi
-  if [ -n "$local_ip" ]; then
+  if [ -n "$local_ip" ] && [ "$local_ip" != "$public_ip" ]; then
     printf 'Panel URL:    http://%s:%s/\n' "$local_ip" "$PORT"
   fi
   printf 'Username:     admin\n'
   printf 'Password:     %s\n' "$admin_password"
-  printf 'Entrance:     %s\n' "$entrance"
+  if [ -n "$entrance_line" ]; then
+    printf 'Entrance:     %s\n' "$entrance_line"
+  fi
   printf '\nHandy commands:\n'
   printf '  systemctl status %s\n' "$SERVICE_NAME"
   printf '  journalctl -u %s -f\n' "$SERVICE_NAME"
