@@ -1,1 +1,15 @@
-{"packages":[]}
+{
+  "packages": [
+    {
+      "id": "nginx",
+      "version": "1.31.1.1",
+      "os": "linux",
+      "arch": "amd64",
+      "url": "https://github.com/techshield-tech/tsPanel/releases/download/packages/nginx-1.31.1.1-linux-amd64.tar.gz",
+      "sha256": "3ba0995e53f0050c243eff17ec004cb87d8abea23be15b70bfebd13cc44145a7",
+      "signature": "jeXof9vK3gKUSC0KPRpZ1z0RNRmYfJtT0mi12OzQP4bUIfyoNAooSiVEwKKJkFx2ZGfntDP4rKhtCTw9J6/zBA==",
+      "size": 24423378,
+      "minGlibc": "2.31"
+    }
+  ]
+}
