@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.8","releasedAt":"2026-09-29T11:20:06Z","changelog":["feat(home): restyle the home page after aaPanel's classic layout","feat(system): report real counts on the home overview","feat(apps): install non-built apps via apt/dnf and list only installable apps (#2)"]}
+{"latest":"0.1.0-beta.9","releasedAt":"2026-09-29T11:39:45Z","changelog":["fix(waf): unblock the stats ingest pipeline"]}
