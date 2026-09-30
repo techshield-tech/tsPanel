@@ -1,6 +1,17 @@
 {
   "packages": [
     {
+      "id": "geoip",
+      "version": "2026.09",
+      "os": "linux",
+      "arch": "all",
+      "url": "https://github.com/techshield-tech/tsPanel/releases/download/packages/geoip-2026.09-linux-all.tar.gz",
+      "sha256": "85b6117b7c48113fb7975e9a2ade9933e5123b54a9b0acc4b85ab5ba46872244",
+      "signature": "CpgxgiC+hSOG1f0OERvrqlJq0qai5stil03oHj8Xu9lw82ewNya9T5mAkR/3361td/R8L54d8nplNfTbXm8VAA==",
+      "size": 4250599,
+      "minGlibc": "2.31"
+    },
+    {
       "id": "nginx",
       "version": "1.31.1.1",
       "os": "linux",
