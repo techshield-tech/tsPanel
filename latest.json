@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.16","releasedAt":"2026-09-30T02:19:47Z","changelog":["feat(waf): refresh the GeoIP database daily from the distribution index"]}
+{"latest":"0.1.0-beta.17","releasedAt":"2026-09-30T04:01:00Z","changelog":["feat(deploy): promote Deploy to a top-level module with new sources, previews and domains","feat(settings): remove migrate and panel-migrate","test: fix two tests broken by signed distribution indexes","refactor(waf): share config, wire and control types between panel and tswafd","refactor(waf): move the tswaf plugin into the server module"]}
