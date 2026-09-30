@@ -29,14 +29,21 @@ Usage: install.sh [options]
   --version X       Install a specific version (default: latest release)
   --port N          Listen port (default: 8888)
   --repo owner/name Release repo (default: techshield-tech/tsPanel)
-  --tarball PATH    Install from a local tarball instead of downloading
+  --tarball PATH    Install from a local tarball instead of downloading. The
+                    tarball must sit next to SHA256SUMS and SHA256SUMS.sig
+                    (signature is verified), or have a PATH.sha256 file
+                    (integrity only), unless --insecure is given
+  --insecure        With --tarball: skip all verification (use only for a
+                    tarball you have verified yourself)
   --db-url URL      Use an existing PostgreSQL database (skip local install)
   --no-firewall     Do not touch ufw/firewalld
+  --skip-db-backup  On upgrade, do not pg_dump the panel database first
   -y                Assume yes / non-interactive
   -h, --help        Show this help
 
 Environment variables TSPANEL_VERSION, TSPANEL_PORT, TSPANEL_REPO,
 TSPANEL_TARBALL and TSPANEL_DATABASE_URL are equivalent to the flags above.
+TSPANEL_PUBLIC_KEY overrides the embedded ed25519 release signing key (base64).
 EOF
 }
 
@@ -70,6 +77,14 @@ parse_args() {
         ;;
       --no-firewall)
         NO_FIREWALL=1
+        shift
+        ;;
+      --insecure)
+        INSECURE=1
+        shift
+        ;;
+      --skip-db-backup)
+        SKIP_DB_BACKUP=1
         shift
         ;;
       -y)
@@ -207,6 +222,137 @@ read_and_validate_sha256() {
   printf '%s' "$hash"
 }
 
+require_valid_version() {
+  local v="$1" source="$2"
+  if [ "${#v}" -gt 64 ] || ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+    log_err "invalid version string from $source: '$v'"
+    exit 1
+  fi
+}
+
+require_ed25519_verifier() {
+  require_cmd openssl
+  require_cmd base64
+  if ! openssl genpkey -algorithm ED25519 >/dev/null 2>&1; then
+    log_err "this OpenSSL ($(openssl version 2>/dev/null || echo unknown)) cannot verify Ed25519 signatures; OpenSSL 1.1.1 or newer is required"
+    log_err "upgrade OpenSSL, or download the release yourself, verify SHA256SUMS.sig, and rerun with --tarball PATH --insecure"
+    exit 1
+  fi
+}
+
+write_public_key_pem() {
+  local out="$1" raw="$TMP_DIR/public-key.raw"
+  if ! printf '%s' "$PUBLIC_KEY" | base64 -d > "$raw" 2>/dev/null || [ "$(wc -c < "$raw")" -ne 32 ]; then
+    log_err "the release signing public key is not a base64-encoded 32-byte ed25519 key"
+    exit 1
+  fi
+  {
+    echo "-----BEGIN PUBLIC KEY-----"
+    { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; cat "$raw"; } | base64 -w0 | fold -w64
+    echo
+    echo "-----END PUBLIC KEY-----"
+  } > "$out"
+}
+
+verify_signature() {
+  local file="$1" sig_file="$2"
+  local pem="$TMP_DIR/public-key.pem" msg="$TMP_DIR/signed.msg" sig_raw="$TMP_DIR/signature.raw"
+  [ -f "$pem" ] || write_public_key_pem "$pem"
+  printf '%s' "$(sha256sum "$file" | awk '{print $1}')" > "$msg"
+  if ! tr -d '[:space:]' < "$sig_file" | base64 -d > "$sig_raw" 2>/dev/null || [ "$(wc -c < "$sig_raw")" -ne 64 ]; then
+    return 1
+  fi
+  if openssl pkeyutl -verify -pubin -inkey "$pem" -rawin -in "$msg" -sigfile "$sig_raw" >/dev/null 2>&1; then
+    return 0
+  fi
+  if openssl pkeyutl -verify -pubin -inkey "$pem" -in "$msg" -sigfile "$sig_raw" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+require_valid_signature() {
+  local file="$1" sig_file="$2" what="$3"
+  if ! verify_signature "$file" "$sig_file"; then
+    log_err "signature verification FAILED for $what; refusing to continue"
+    exit 1
+  fi
+  log_ok "signature verified: $what"
+}
+
+fetch_signature() {
+  local url="$1" out="$2"
+  fetch_url "$url" "$out"
+  case "$FETCH_STATUS" in
+    2??) return 0 ;;
+    404)
+      log_err "signature not found (HTTP 404): $url"
+      log_err "this release is not signed, so it cannot be installed"
+      exit 1
+      ;;
+    *)
+      log_err "unexpected HTTP status $FETCH_STATUS fetching $url"
+      exit 1
+      ;;
+  esac
+}
+
+sums_entry() {
+  local sums_file="$1" name="$2"
+  awk -v n="$name" '{ f = $2; sub(/^\*/, "", f); if (f == n) { print $1; exit } }' "$sums_file"
+}
+
+verify_file_against_sums() {
+  local sums_file="$1" file="$2"
+  local name expected actual
+  name="$(basename "$file")"
+  expected="$(sums_entry "$sums_file" "$name")"
+  if ! [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    log_err "SHA256SUMS has no valid entry for $name"
+    exit 1
+  fi
+  actual="$(sha256sum "$file" | awk '{print $1}')"
+  if [ "${expected,,}" != "${actual,,}" ]; then
+    log_err "checksum mismatch for $name"
+    exit 1
+  fi
+  log_ok "checksum verified: $name"
+}
+
+verify_local_tarball() {
+  local tarball="$1"
+  local dir
+  dir="$(dirname "$tarball")"
+
+  if [ "$INSECURE" = "1" ]; then
+    log_warn "--insecure: installing $tarball WITHOUT signature or checksum verification"
+    return 0
+  fi
+
+  if [ -f "$dir/SHA256SUMS" ] && [ -f "$dir/SHA256SUMS.sig" ]; then
+    require_ed25519_verifier
+    require_valid_signature "$dir/SHA256SUMS" "$dir/SHA256SUMS.sig" "$dir/SHA256SUMS"
+    verify_file_against_sums "$dir/SHA256SUMS" "$tarball"
+    return 0
+  fi
+
+  if [ -f "${tarball}.sha256" ]; then
+    log_warn "verifying ${tarball}.sha256 (integrity only; no signature available)"
+    local expected actual
+    expected="$(read_and_validate_sha256 "${tarball}.sha256")"
+    actual="$(sha256sum "$tarball" | awk '{print $1}')"
+    if [ "${expected,,}" != "${actual,,}" ]; then
+      log_err "checksum mismatch for $tarball"
+      exit 1
+    fi
+    log_ok "checksum verified"
+    return 0
+  fi
+
+  log_err "cannot verify $tarball: place SHA256SUMS and SHA256SUMS.sig next to it, provide ${tarball}.sha256, or pass --insecure"
+  exit 1
+}
+
 resolve_source() {
   RAW_TAG=""
   VER=""
@@ -217,37 +363,31 @@ resolve_source() {
       log_err "tarball not found: $TARBALL_OPT"
       exit 1
     fi
+    verify_local_tarball "$TARBALL_OPT"
     SRC_TARBALL="$TARBALL_OPT"
-    if [ -f "${TARBALL_OPT}.sha256" ]; then
-      log_info "verifying checksum against ${TARBALL_OPT}.sha256"
-      local expected actual
-      expected="$(read_and_validate_sha256 "${TARBALL_OPT}.sha256")"
-      actual="$(sha256sum "$TARBALL_OPT" | awk '{print $1}')"
-      if [ "$expected" != "$actual" ]; then
-        log_err "checksum mismatch for $TARBALL_OPT"
-        exit 1
-      fi
-      log_ok "checksum verified"
-    else
-      log_warn "no ${TARBALL_OPT}.sha256 found; skipping checksum verification"
-    fi
     return 0
   fi
 
+  require_ed25519_verifier
+
   if [ -n "$VERSION_OPT" ]; then
     VER="${VERSION_OPT#v}"
+    require_valid_version "$VER" "--version"
     RAW_TAG="v${VER}"
   else
     local latest_url="https://raw.githubusercontent.com/$REPO/main/latest.json"
     log_info "resolving latest version from $latest_url"
-    local latest_json="$TMP_DIR/latest.json"
+    local latest_json="$TMP_DIR/latest.json" latest_sig="$TMP_DIR/latest.json.sig"
     fetch_url "$latest_url" "$latest_json"
     check_fetch_status "$latest_url"
-    VER="$(grep -om1 '"latest"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_json" | sed -E 's/.*:"([^"]*)"/\1/')"
+    fetch_signature "${latest_url}.sig" "$latest_sig"
+    require_valid_signature "$latest_json" "$latest_sig" "latest.json"
+    VER="$(grep -om1 '"latest"[[:space:]]*:[[:space:]]*"[^"]*"' "$latest_json" | sed -E 's/.*:[[:space:]]*"([^"]*)"/\1/')"
     if [ -z "$VER" ]; then
       log_err "could not determine latest version from $latest_url"
       exit 1
     fi
+    require_valid_version "$VER" "$latest_url"
     RAW_TAG="v${VER}"
   fi
 
@@ -256,22 +396,17 @@ resolve_source() {
   local tarball_name="tspanel-${VER}-linux-${ARCH}.tar.gz"
   local download_base="https://github.com/$REPO/releases/download/$RAW_TAG"
 
+  local sums_path="$TMP_DIR/SHA256SUMS" sums_sig_path="$TMP_DIR/SHA256SUMS.sig"
+  fetch_url "$download_base/SHA256SUMS" "$sums_path"
+  check_fetch_status "$download_base/SHA256SUMS"
+  fetch_signature "$download_base/SHA256SUMS.sig" "$sums_sig_path"
+  require_valid_signature "$sums_path" "$sums_sig_path" "SHA256SUMS ($RAW_TAG)"
+
   local tarball_path="$TMP_DIR/$tarball_name"
   fetch_url "$download_base/$tarball_name" "$tarball_path"
   check_fetch_status "$download_base/$tarball_name"
 
-  local sha_path="$TMP_DIR/$tarball_name.sha256"
-  fetch_url "$download_base/$tarball_name.sha256" "$sha_path"
-  check_fetch_status "$download_base/$tarball_name.sha256"
-
-  local expected actual
-  expected="$(read_and_validate_sha256 "$sha_path")"
-  actual="$(sha256sum "$tarball_path" | awk '{print $1}')"
-  if [ "$expected" != "$actual" ]; then
-    log_err "checksum mismatch for downloaded $tarball_name"
-    exit 1
-  fi
-  log_ok "checksum verified"
+  verify_file_against_sums "$sums_path" "$tarball_path"
   SRC_TARBALL="$tarball_path"
 }
 
@@ -288,9 +423,22 @@ extract_tarball() {
 
 determine_mode() {
   IS_UPGRADE=0
-  if [ -f "$CONFIG_PATH" ]; then
+  if [ -f "$COMPLETE_MARKER" ]; then
+    IS_UPGRADE=1
+  elif [ -f "$CONFIG_PATH" ] && [ ! -f "$INCOMPLETE_MARKER" ]; then
     IS_UPGRADE=1
   fi
+}
+
+mark_install_started() {
+  mkdir -p "$INSTALL_DIR"
+  rm -f "$COMPLETE_MARKER"
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$INCOMPLETE_MARKER"
+}
+
+mark_install_complete() {
+  date -u +%Y-%m-%dT%H:%M:%SZ > "$COMPLETE_MARKER"
+  rm -f "$INCOMPLETE_MARKER"
 }
 
 create_directories() {
@@ -457,6 +605,10 @@ install_binary() {
   cp "$EXTRACT_DIR/tspanel/tspanel" "$INSTALL_DIR/tspanel.new"
   chmod 0755 "$INSTALL_DIR/tspanel.new"
   mv -f "$INSTALL_DIR/tspanel.new" "$INSTALL_DIR/tspanel"
+  if [ -f "$EXTRACT_DIR/tspanel/uninstall.sh" ]; then
+    cp "$EXTRACT_DIR/tspanel/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
+    chmod 0755 "$INSTALL_DIR/uninstall.sh"
+  fi
 }
 
 get_old_version() {
@@ -486,6 +638,10 @@ BIN="${INSTALL_DIR}/tspanel"
 CFG="${CONFIG_PATH}"
 if [ "\$#" -ge 1 ]; then
   case "\$1" in
+    uninstall)
+      shift
+      exec bash "${INSTALL_DIR}/uninstall.sh" "\$@"
+      ;;
     serve|migrate|reset-password|entrance)
       exec "\$BIN" "\$@" --config "\$CFG"
       ;;
@@ -520,13 +676,19 @@ EOF
 http_probe() {
   local host="$1" port="$2"
   if [ -n "$CURL_BIN" ]; then
-    if curl -s -o /dev/null --max-time 2 "http://${host}:${port}/"; then
+    if curl -sk -o /dev/null --max-time 2 "https://${host}:${port}/" ||
+      curl -s -o /dev/null --max-time 2 "http://${host}:${port}/"; then
       return 0
     fi
     return 1
   fi
   if [ -n "$WGET_BIN" ]; then
     local rc=0
+    wget -q --no-check-certificate -O /dev/null --timeout=2 --tries=1 "https://${host}:${port}/" 2>/dev/null || rc=$?
+    if [ "$rc" -eq 0 ] || [ "$rc" -eq 8 ]; then
+      return 0
+    fi
+    rc=0
     wget -q -O /dev/null --timeout=2 --tries=1 "http://${host}:${port}/" 2>/dev/null || rc=$?
     if [ "$rc" -eq 0 ] || [ "$rc" -eq 8 ]; then
       return 0
@@ -558,14 +720,15 @@ wait_ready() {
 }
 
 setup_firewall() {
+  local port="$1"
   if [ "$NO_FIREWALL" = "1" ]; then
     return 0
   fi
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi '^Status: active'; then
-    ufw allow "${PORT}/tcp" || true
+    ufw allow "${port}/tcp" || true
   fi
   if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
-    firewall-cmd --permanent --add-port="${PORT}/tcp"
+    firewall-cmd --permanent --add-port="${port}/tcp"
     firewall-cmd --reload
   fi
 }
@@ -600,9 +763,9 @@ finish_fresh_install() {
   if [ -n "$entrance_path" ]; then
     if [ "$entrance_state" = "enabled" ]; then
       if [ -n "$public_ip" ]; then
-        entrance_line="http://${public_ip}:${PORT}${entrance_path}"
+        entrance_line="https://${public_ip}:${PORT}${entrance_path}"
       elif [ -n "$local_ip" ]; then
-        entrance_line="http://${local_ip}:${PORT}${entrance_path}"
+        entrance_line="https://${local_ip}:${PORT}${entrance_path}"
       else
         entrance_line="$entrance_path"
       fi
@@ -613,10 +776,10 @@ finish_fresh_install() {
 
   printf '\n%s=== tsPanel installed ===%s\n' "$C_GREEN" "$C_RESET"
   if [ -n "$public_ip" ]; then
-    printf 'Panel URL:    http://%s:%s/\n' "$public_ip" "$PORT"
+    printf 'Panel URL:    https://%s:%s/\n' "$public_ip" "$PORT"
   fi
   if [ -n "$local_ip" ] && [ "$local_ip" != "$public_ip" ]; then
-    printf 'Panel URL:    http://%s:%s/\n' "$local_ip" "$PORT"
+    printf 'Panel URL:    https://%s:%s/\n' "$local_ip" "$PORT"
   fi
   printf 'Username:     admin\n'
   printf 'Password:     %s\n' "$admin_password"
@@ -629,6 +792,168 @@ finish_fresh_install() {
   printf '  ts reset-password admin\n'
 }
 
+read_config_scalar() {
+  local cfg="$1" key="$2"
+  sed -nE "s/^${key}:[[:space:]]*(\"(([^\"\\\\]|\\\\.)*)\"|'([^']*)'|([^[:space:]#]*)).*/\2\4\5/p" "$cfg" 2>/dev/null | head -1 | sed -e 's/\\"/"/g' -e 's/\\\\/\\/g'
+}
+
+read_database_url_from_config() {
+  local cfg="$1"
+  awk '
+    /^database:/ { in_db = 1; next }
+    in_db && /^[^[:space:]#]/ { in_db = 0 }
+    in_db && /^[[:space:]]+url:/ { sub(/^[[:space:]]+url:[[:space:]]*/, ""); print; exit }
+  ' "$cfg" 2>/dev/null | sed -E \
+    -e "s/^\"(([^\"\\\\]|\\\\.)*)\".*/\1/" \
+    -e "s/^'([^']*)'.*/\1/" \
+    -e 's/[[:space:]]+#.*$//' \
+    -e 's/\\"/"/g' -e 's/\\\\/\\/g'
+}
+
+pct_decode() {
+  printf '%b' "${1//%/\\x}"
+}
+
+build_pg_env() {
+  local url="$1" rest query hostpath userinfo hostport db user pass host port sslmode
+  case "$url" in
+    postgres://*|postgresql://*) ;;
+    *) return 1 ;;
+  esac
+  rest="${url#*://}"
+  query=""
+  case "$rest" in
+    *\?*)
+      query="${rest#*\?}"
+      rest="${rest%%\?*}"
+      ;;
+  esac
+  userinfo=""
+  hostpath="$rest"
+  case "$rest" in
+    *@*)
+      userinfo="${rest%@*}"
+      hostpath="${rest##*@}"
+      ;;
+  esac
+  hostport="${hostpath%%/*}"
+  db=""
+  case "$hostpath" in
+    */*) db="${hostpath#*/}" ;;
+  esac
+  user="${userinfo%%:*}"
+  pass=""
+  case "$userinfo" in
+    *:*) pass="${userinfo#*:}" ;;
+  esac
+  case "$hostport" in
+    \[*\]*)
+      host="${hostport%%\]*}"
+      host="${host#\[}"
+      port=""
+      case "$hostport" in
+        *\]:*) port="${hostport##*\]:}" ;;
+      esac
+      ;;
+    *:*)
+      host="${hostport%%:*}"
+      port="${hostport##*:}"
+      ;;
+    *)
+      host="$hostport"
+      port=""
+      ;;
+  esac
+  sslmode=""
+  case "&${query}&" in
+    *\&sslmode=*)
+      sslmode="${query#*sslmode=}"
+      sslmode="${sslmode%%&*}"
+      ;;
+  esac
+
+  PG_DBNAME="$(pct_decode "$db")"
+  if [ -z "$PG_DBNAME" ]; then
+    return 1
+  fi
+  PG_ENV=()
+  [ -n "$user" ] && PG_ENV+=("PGUSER=$(pct_decode "$user")")
+  [ -n "$pass" ] && PG_ENV+=("PGPASSWORD=$(pct_decode "$pass")")
+  [ -n "$host" ] && PG_ENV+=("PGHOST=$(pct_decode "$host")")
+  [ -n "$port" ] && PG_ENV+=("PGPORT=$port")
+  [ -n "$sslmode" ] && PG_ENV+=("PGSSLMODE=$sslmode")
+  PG_ENV+=("PGCONNECT_TIMEOUT=10")
+  return 0
+}
+
+prune_db_backups() {
+  local dir="$1" keep=3 f
+  ls -1t "$dir"/tspanel-db-*.dump 2>/dev/null | tail -n +$((keep + 1)) | while IFS= read -r f; do
+    rm -f -- "$f"
+  done
+}
+
+backup_database() {
+  DB_BACKUP_FILE=""
+  local db_url data_dir dump_dir safe_version stamp file
+  db_url="$(read_database_url_from_config "$CONFIG_PATH")"
+  if [ -z "$db_url" ]; then
+    log_err "could not read database.url from $CONFIG_PATH"
+    return 1
+  fi
+  if ! build_pg_env "$db_url"; then
+    log_err "database.url is not a postgres:// URL with a database name; cannot back it up"
+    return 1
+  fi
+  if ! command -v pg_dump >/dev/null 2>&1; then
+    log_err "pg_dump not found; install the PostgreSQL client tools"
+    return 1
+  fi
+
+  data_dir="$(read_config_scalar "$CONFIG_PATH" dataDir)"
+  [ -n "$data_dir" ] || data_dir="$INSTALL_DIR/data"
+  dump_dir="$data_dir/db-backups"
+  mkdir -p "$dump_dir"
+  chmod 0700 "$dump_dir"
+
+  safe_version="${old_version//[^0-9A-Za-z._-]/_}"
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  file="$dump_dir/tspanel-db-${stamp}-v${safe_version}.dump"
+
+  log_info "backing up the panel database to $file"
+  if ! env "${PG_ENV[@]}" pg_dump --format=custom --no-owner --file="$file.partial" "$PG_DBNAME"; then
+    rm -f -- "$file.partial"
+    log_err "pg_dump failed"
+    return 1
+  fi
+  chmod 0600 "$file.partial"
+  mv -f "$file.partial" "$file"
+  prune_db_backups "$dump_dir"
+  DB_BACKUP_FILE="$file"
+  log_ok "database backup written"
+}
+
+restore_database() {
+  local file="$1" db_url
+  db_url="$(read_database_url_from_config "$CONFIG_PATH")"
+  if ! build_pg_env "$db_url"; then
+    log_err "cannot parse database.url; restore $file manually with pg_restore"
+    return 1
+  fi
+  if ! command -v pg_restore >/dev/null 2>&1 || ! command -v psql >/dev/null 2>&1; then
+    log_err "psql/pg_restore not found; restore $file manually"
+    return 1
+  fi
+  log_info "restoring the panel database from $file"
+  env "${PG_ENV[@]}" psql --no-psqlrc -q -d "$PG_DBNAME" -c 'DROP OWNED BY CURRENT_USER CASCADE' ||
+    log_warn "could not drop existing objects; relying on pg_restore --clean"
+  if ! env "${PG_ENV[@]}" pg_restore --clean --if-exists --no-owner --dbname="$PG_DBNAME" "$file"; then
+    log_err "pg_restore reported errors; the dump is kept at $file"
+    return 1
+  fi
+  log_ok "database restored"
+}
+
 print_upgrade_summary() {
   local old="$1" new="$2"
   printf '\n%s=== tsPanel upgraded ===%s\n' "$C_GREEN" "$C_RESET"
@@ -639,6 +964,8 @@ print_upgrade_summary() {
 main() {
   INSTALL_DIR="/www/server/tspanel"
   CONFIG_PATH="$INSTALL_DIR/config.yaml"
+  COMPLETE_MARKER="$INSTALL_DIR/.install-complete"
+  INCOMPLETE_MARKER="$INSTALL_DIR/.install-incomplete"
   WRAPPER_PATH="/usr/local/bin/ts"
   SERVICE_NAME="tspanel"
   SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}.service"
@@ -648,8 +975,11 @@ main() {
   VERSION_OPT="${TSPANEL_VERSION:-}"
   TARBALL_OPT="${TSPANEL_TARBALL:-}"
   DB_URL_OPT="${TSPANEL_DATABASE_URL:-}"
+  PUBLIC_KEY="${TSPANEL_PUBLIC_KEY:-qHG69umeIaHc+ibIirdy2B9TWlEC2os4Ui4sqtObYx0=}"
   NO_FIREWALL=0
   ASSUME_YES=0
+  INSECURE=0
+  SKIP_DB_BACKUP=0
 
   setup_colors
   parse_args "$@"
@@ -674,6 +1004,7 @@ main() {
   local backup_made=0
   local old_port="$PORT"
   local old_version="unknown"
+  DB_BACKUP_FILE=""
 
   if [ "$IS_UPGRADE" = "1" ]; then
     old_version="$(get_old_version)"
@@ -681,6 +1012,14 @@ main() {
 
     log_info "stopping $SERVICE_NAME"
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+
+    if [ "$SKIP_DB_BACKUP" = "1" ]; then
+      log_warn "--skip-db-backup: the panel database will not be backed up before upgrading"
+    elif ! backup_database; then
+      log_err "aborting the upgrade before touching the binary; rerun with --skip-db-backup to upgrade without a database backup"
+      systemctl start "$SERVICE_NAME" 2>/dev/null || true
+      exit 1
+    fi
 
     if [ -f "$INSTALL_DIR/tspanel" ]; then
       cp "$INSTALL_DIR/tspanel" "$INSTALL_DIR/tspanel.bak"
@@ -691,6 +1030,8 @@ main() {
 
     install_binary
   else
+    mark_install_started
+
     if [ -n "$DB_URL_OPT" ]; then
       DATABASE_URL="$DB_URL_OPT"
     else
@@ -725,6 +1066,9 @@ main() {
         systemctl stop "$SERVICE_NAME" 2>/dev/null || true
         cp "$INSTALL_DIR/tspanel.bak" "$INSTALL_DIR/tspanel"
         chmod 0755 "$INSTALL_DIR/tspanel"
+        if [ -n "$DB_BACKUP_FILE" ]; then
+          restore_database "$DB_BACKUP_FILE" || log_err "database restore failed; the old binary may not start against the migrated schema"
+        fi
         systemctl restart "$SERVICE_NAME" || true
       else
         log_err "no previous binary backup was available; new binary left in place"
@@ -737,12 +1081,17 @@ main() {
     fi
   fi
 
-  setup_firewall
+  setup_firewall "$target_port"
 
   if [ "$IS_UPGRADE" = "1" ]; then
+    mark_install_complete
     print_upgrade_summary "$old_version" "$NEW_VERSION"
+    if [ -n "$DB_BACKUP_FILE" ]; then
+      printf 'DB backup:   %s\n' "$DB_BACKUP_FILE"
+    fi
   else
     finish_fresh_install
+    mark_install_complete
   fi
 }
 
