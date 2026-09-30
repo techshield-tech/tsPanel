@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.13","releasedAt":"2026-09-30T01:47:45Z","changelog":["Redesign DNS provider screen as master-detail with inline record management"]}
+{"latest":"0.1.0-beta.14","releasedAt":"2026-09-30T02:01:57Z","changelog":["fix: address Lighthouse audit findings on the WAF overview page"]}
