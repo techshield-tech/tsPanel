@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.29","releasedAt":"2026-10-01T09:50:14Z","changelog":["feat(waf): split tswaf into its own module and drive it over the control socket"]}
+{"latest":"0.1.0-beta.30","releasedAt":"2026-10-01T11:09:09Z","changelog":["feat(node): run websites, SSL, docker and deploy on agent nodes"]}
