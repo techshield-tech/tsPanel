@@ -32,6 +32,17 @@
       "signature": "CdJ5UZ7sTL+/oUjWqVZFFi2OSkssrw0SFZ48/AqJ7g5GNuk0T5fJ8H1ACykEhTJAHuuIK/GADfrLEMul/G3PDg==",
       "size": 14515396,
       "minGlibc": "2.31"
+    },
+    {
+      "id": "pure-ftpd",
+      "version": "1.0.54",
+      "os": "linux",
+      "arch": "amd64",
+      "url": "https://github.com/techshield-tech/tsPanel/releases/download/packages/pure-ftpd-1.0.54-linux-amd64.tar.gz",
+      "sha256": "d81dfec02fba67e394fce8b4ab0fc4b57fe63011693ee401a33fd097ca1677de",
+      "signature": "U1TmhOXFIaP/KRIA9sRPniTkQrIvACj46hWq1uEid53dV6d44nDaTrE9wdTRljp7KlJMAxJB3KlPcguJ+FIXDw==",
+      "size": 2190675,
+      "minGlibc": "2.31"
     }
   ]
 }
