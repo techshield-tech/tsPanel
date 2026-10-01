@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.35","releasedAt":"2026-10-01T13:43:15Z","changelog":["fix(node): keep SSH command output when stdout and stderr share a buffer"]}
+{"latest":"0.1.0-beta.36","releasedAt":"2026-10-01T14:08:46Z","changelog":["fix(deploy): polish project list, detail and wizard UI"]}
