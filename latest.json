@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.28","releasedAt":"2026-10-01T06:32:19Z","changelog":["fix(deploy): show no memory limit for unlimited project containers"]}
+{"latest":"0.1.0-beta.29","releasedAt":"2026-10-01T09:50:14Z","changelog":["feat(waf): split tswaf into its own module and drive it over the control socket"]}
