@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.30","releasedAt":"2026-10-01T11:09:09Z","changelog":["feat(node): run websites, SSL, docker and deploy on agent nodes"]}
+{"latest":"0.1.0-beta.31","releasedAt":"2026-10-01T11:38:42Z","changelog":["feat(node): keep enrolled agent nodes valid permanently"]}
