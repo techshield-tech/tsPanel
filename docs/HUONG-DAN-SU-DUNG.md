@@ -5,6 +5,7 @@ Tài liệu hướng dẫn cài đặt và sử dụng tsPanel. Nội dung gồm
 - Phiên bản áp dụng: **tsPanel 0.1.0-beta.36**
 - Tên menu, tab và nút bấm được viết **in đậm**, đúng như trên giao diện. Đường đi giữa các màn hình được viết dạng **Menu → Tab → Nút**.
 - Giải thích thuật ngữ nằm ở [Phụ lục: Thuật ngữ](#phụ-lục-thuật-ngữ).
+- Hướng dẫn cài đặt và vận hành bằng tiếng Anh: [Installation Guide](INSTALL.md).
 
 ---
 
@@ -30,6 +31,7 @@ Tài liệu hướng dẫn cài đặt và sử dụng tsPanel. Nội dung gồm
 18. [Cài đặt panel](#18-cài-đặt-panel)
 19. [Xử lý sự cố](#19-xử-lý-sự-cố)
 20. [Nâng cấp](#20-nâng-cấp)
+21. [Gỡ cài đặt](#21-gỡ-cài-đặt)
 
 [Phụ lục: Thuật ngữ](#phụ-lục-thuật-ngữ)
 
@@ -63,10 +65,14 @@ tsPanel là panel quản trị máy chủ Linux qua trình duyệt. Mọi chức
 | Kiến trúc | `x86_64` (amd64) hoặc `aarch64` (arm64) |
 | Tài nguyên | Tối thiểu 1 vCPU và 1 GB RAM. Nếu chạy cơ sở dữ liệu hoặc nhiều ứng dụng, nên có từ 2 GB RAM |
 | Quyền | `root` hoặc tài khoản có `sudo` |
+| Hệ thống init | `systemd` |
 | Mạng | Truy cập được `github.com` và `raw.githubusercontent.com`. Cổng panel mặc định là `8888/TCP` |
+| Công cụ | `curl` hoặc `wget`, `tar`, `sha256sum` (hầu hết bản phân phối đã có sẵn) |
 
 > [!WARNING]
 > Nên cài trên máy chủ mới. Không cài chung với aaPanel, BT Panel hoặc panel khác cũng dùng thư mục `/www`.
+
+Panel lưu dữ liệu trong **PostgreSQL 14 trở lên**, và script cài đặt sẽ tự cài PostgreSQL. Ubuntu 20.04 và Debian 11 chỉ có PostgreSQL cũ hơn bản 14 nên script sẽ dừng lại. Với các hệ điều hành này, hãy [dùng PostgreSQL có sẵn](#dùng-postgresql-có-sẵn).
 
 ### 2.2 Cài đặt
 
@@ -81,6 +87,23 @@ Chạy lệnh cài đặt:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash
 ```
+
+Nếu máy không có `curl`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash
+```
+
+Nếu đang đăng nhập bằng `root`, có thể bỏ `sudo`.
+
+Script cài đặt sẽ lần lượt:
+
+1. Kiểm tra môi trường: quyền root, Linux, systemd và kiến trúc CPU.
+2. Tải bản phát hành mới nhất từ [GitHub Releases](https://github.com/techshield-tech/tsPanel/releases), kiểm tra chữ ký và tính toàn vẹn.
+3. Cài PostgreSQL (qua `apt` hoặc `dnf`/`yum`), rồi tạo database và user `tspanel` với mật khẩu ngẫu nhiên.
+4. Cài panel vào `/www/server/tspanel`, tạo service systemd `tspanel` và lệnh quản trị `ts`.
+5. Nếu `ufw`/`firewalld` đang bật, mở cổng panel và cổng `8889/TCP` (cổng của agent node).
+6. Tạo mật khẩu cho tài khoản `admin` và in ra thông tin đăng nhập.
 
 Khi hoàn tất, script in ra thông tin đăng nhập:
 
@@ -99,9 +122,9 @@ Entrance:     https://203.0.113.10:8888/xxxxxxxx   (the only URL that opens the 
 | `Entrance` | URL đăng nhập riêng. Trình duyệt chưa đăng nhập chỉ mở được panel qua URL này |
 
 > [!IMPORTANT]
-> Hãy lưu mật khẩu và URL `Entrance` ngay. Nếu bị mất, có thể khôi phục bằng lệnh `ts`, xem [mục 19.2](#192-lệnh-khôi-phục-truy-cập).
+> Hãy lưu mật khẩu và URL `Entrance` ngay. Nếu bị mất, có thể khôi phục bằng lệnh `ts`, xem [mục 19.2](#192-lệnh-quản-trị).
 
-Các tuỳ chọn cài đặt nâng cao (đổi cổng, cài phiên bản cụ thể, dùng PostgreSQL có sẵn, cài offline) được mô tả trong [README](../README.md#tùy-chọn-cài-đặt-nâng-cao).
+Các tuỳ chọn cài đặt nâng cao (đổi cổng, cài phiên bản cụ thể, dùng PostgreSQL có sẵn, cài offline) được mô tả ở [mục 2.5](#25-tuỳ-chọn-cài-đặt-nâng-cao).
 
 ### 2.3 Truy cập lần đầu
 
@@ -122,6 +145,84 @@ Bản cài mới chưa có phần mềm nào. Ở lần đăng nhập đầu ti�
 | Website PHP / WordPress | Nginx (OpenResty), PHP 8.x, MySQL hoặc MariaDB |
 | Cơ sở dữ liệu | PostgreSQL, MySQL/MariaDB, MongoDB, Redis hoặc SQL Server, tuỳ ứng dụng |
 | Tường lửa WAF | Nginx (OpenResty) |
+
+### 2.5 Tuỳ chọn cài đặt nâng cao
+
+Để truyền tham số cho script, dùng `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash -s -- --port 9999
+```
+
+Bạn cũng có thể dùng biến môi trường. Đặt biến **sau** `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo TSPANEL_PORT=9999 bash
+```
+
+| Tham số | Biến môi trường | Mô tả |
+| --- | --- | --- |
+| `--version X` | `TSPANEL_VERSION` | Cài một phiên bản cụ thể, ví dụ `0.1.0-beta.1`. Mặc định là bản mới nhất |
+| `--port N` | `TSPANEL_PORT` | Cổng của panel, mặc định `8888`. Chỉ áp dụng khi cài mới |
+| `--db-url URL` | `TSPANEL_DATABASE_URL` | Dùng PostgreSQL có sẵn và bỏ qua bước cài PostgreSQL |
+| `--tarball PATH` | `TSPANEL_TARBALL` | Cài từ file tarball có sẵn trên máy thay vì tải về |
+| `--insecure` | — | Dùng kèm `--tarball`: bỏ qua mọi bước kiểm tra. Chỉ dùng với tarball đã được kiểm tra thủ công |
+| `--repo owner/name` | `TSPANEL_REPO` | Repo chứa bản phát hành, mặc định `techshield-tech/tsPanel` |
+| `--no-firewall` | — | Không thay đổi `ufw`/`firewalld` |
+| `--skip-db-backup` | — | Khi nâng cấp, không sao lưu database của panel trước |
+| `-y` | — | Không hỏi xác nhận |
+| `-h`, `--help` | — | Xem trợ giúp |
+
+#### Cài một phiên bản cụ thể
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash -s -- --version 0.1.0-beta.1
+```
+
+Danh sách các phiên bản có tại trang [Releases](https://github.com/techshield-tech/tsPanel/releases).
+
+#### Dùng PostgreSQL có sẵn
+
+Cách này cần PostgreSQL **14 trở lên**. Trước hết, tạo user và database cho panel:
+
+```bash
+sudo -u postgres psql -c "CREATE ROLE tspanel WITH LOGIN PASSWORD 'doi-mat-khau-nay'"
+sudo -u postgres psql -c "CREATE DATABASE tspanel OWNER tspanel"
+```
+
+Sau đó cài panel với `--db-url`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh \
+  | sudo bash -s -- --db-url 'postgres://tspanel:doi-mat-khau-nay@127.0.0.1:5432/tspanel?sslmode=disable'
+```
+
+#### Cài từ file tải sẵn (offline)
+
+Dùng cách này khi máy chủ không tải được từ GitHub.
+
+1. Trên một máy khác, vào trang [Releases](https://github.com/techshield-tech/tsPanel/releases) và tải về (`<arch>` là `amd64` hoặc `arm64`):
+   - `install.sh`
+   - `tspanel-<version>-linux-<arch>.tar.gz`
+   - `SHA256SUMS` và `SHA256SUMS.sig` (để kiểm tra chữ ký), **hoặc** `tspanel-<version>-linux-<arch>.tar.gz.sha256` (chỉ kiểm tra tính toàn vẹn)
+2. Chép tất cả vào **cùng một thư mục** trên máy chủ.
+3. Chạy lệnh cài:
+
+   ```bash
+   sudo bash install.sh --tarball tspanel-0.1.0-beta.1-linux-amd64.tar.gz
+   ```
+
+Máy chủ vẫn phải cài được PostgreSQL qua `apt`/`dnf`. Nếu không cài được, hãy dùng thêm `--db-url`.
+
+#### Kiểm tra bản phát hành
+
+Mỗi bản phát hành có file `SHA256SUMS`. Để tự kiểm tra các file đã tải, đặt `SHA256SUMS` cùng thư mục với chúng rồi chạy:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Script cài đặt cũng tự kiểm tra chữ ký ed25519 trong `SHA256SUMS.sig`.
 
 ---
 
@@ -861,7 +962,12 @@ Chuyển giữa các máy chủ bằng ô **Master** ở góc trên bên trái.
 - Các nút **Cài đặt phần mềm**, **Làm mới danh sách** và ô tìm ứng dụng.
 - Bảng danh sách gồm ứng dụng, nhà phát triển, phiên bản, vị trí, trạng thái, **Hiện ở trang chủ** và thao tác (**Thiết lập**, **Gỡ cài đặt**, **Cài đặt**).
 
-Các gói phần mềm được dựng sẵn và được kiểm tra SHA-256 cùng chữ ký ed25519 trước khi cài.
+Kho ứng dụng cài được Nginx (OpenResty), MySQL, MariaDB, PostgreSQL, Redis, Memcached, PHP 7.4 và 8.1–8.4, Pure-FTPd, phpMyAdmin, trình quản lý phiên bản Python và Go, …
+
+- Đây là các **gói dựng sẵn**, tải từ `https://dl.mmoall.com`. Máy chủ không phải biên dịch gì cả.
+- Trước khi cài, panel kiểm tra SHA-256 và chữ ký ed25519 của từng gói.
+- Các gói cần glibc 2.31 trở lên.
+- Danh sách gói hiện có nằm trong [`index.json`](https://dl.mmoall.com/index.json).
 
 ---
 
@@ -910,42 +1016,93 @@ Chế độ **Sáng** / **Tối** / **Hệ thống**, màu nhấn, thu gọn tha
 | Hiện tượng | Cách xử lý |
 | --- | --- |
 | Trình duyệt cảnh báo kết nối không riêng tư | Panel đang dùng chứng chỉ tự ký. Chọn **Nâng cao → Tiếp tục**, hoặc tải lên chứng chỉ hợp lệ ([18.2](#182-chứng-chỉ-https-của-panel)) |
-| Không mở được panel | Kiểm tra đang dùng đúng URL `Entrance`, mở cổng `8888/TCP` trên firewall của nhà cung cấp, kiểm tra service bằng `systemctl status tspanel` |
-| Quên mật khẩu hoặc URL đăng nhập | Dùng các lệnh ở [mục 19.2](#192-lệnh-khôi-phục-truy-cập) |
+| Không mở được panel | Kiểm tra đang dùng đúng URL `Entrance`, mở cổng `8888/TCP` trên firewall của nhà cung cấp, kiểm tra service bằng `systemctl status tspanel` và xem cổng có đang lắng nghe không bằng `ss -ltnp \| grep 8888` |
+| Quên mật khẩu hoặc URL đăng nhập | Dùng các lệnh ở [mục 19.2](#192-lệnh-quản-trị) |
+| Service không khởi động | Xem log bằng `journalctl -u tspanel -n 200 --no-pager` và `/www/server/tspanel/data/logs/error.log` |
+| Cài đặt báo `PostgreSQL server version is too old` | Hệ điều hành có PostgreSQL cũ hơn bản 14. Cài PostgreSQL 14+ từ [postgresql.org](https://www.postgresql.org/download/) rồi cài lại với `--db-url` ([mục 2.5](#dùng-postgresql-có-sẵn)) |
+| Cài đặt báo `unsupported distribution for automatic PostgreSQL setup` | Tự cài PostgreSQL 14+ rồi cài lại với `--db-url` |
+| Cài đặt báo `checksum mismatch` | File tải về bị lỗi hoặc không đầy đủ. Hãy chạy lại lệnh cài |
 | Tên miền không truy cập được | Kiểm tra bản ghi A, chờ DNS cập nhật, kiểm tra đã **Lưu tên miền**, mở cổng 80 và 443 |
 | Triển khai thất bại | Xem [mục 5.11](#511-lỗi-triển-khai-thường-gặp) |
 | Dữ liệu ứng dụng mất sau khi triển khai lại | Xem [mục 5.12](#512-dữ-liệu-của-ứng-dụng) |
 | Ổ đĩa đầy | Dọn image không dùng trong **Docker → Image cục bộ**, xoá bản sao lưu cũ, kiểm tra **Giám sát** |
 | Client MCP báo lỗi | Xem bảng mã lỗi ở [mục 6.6](#66-bảo-mật-và-mã-lỗi) |
 
-### 19.2 Lệnh khôi phục truy cập
+### 19.2 Lệnh quản trị
 
-Chạy trên máy chủ với quyền `root`:
+Lệnh `ts` được cài vào `/usr/local/bin/ts`. Chạy trên máy chủ với quyền `root` hoặc `sudo`:
 
 | Mục đích | Lệnh |
 | --- | --- |
-| Đặt lại mật khẩu `admin` | `sudo ts reset-password admin` |
-| Xem URL đăng nhập riêng | `sudo ts entrance show` |
-| Tắt URL đăng nhập riêng | `sudo ts entrance disable` |
+| Đặt lại mật khẩu `admin` (tạo mật khẩu ngẫu nhiên mới) | `sudo ts reset-password admin` |
+| Xem URL đăng nhập riêng và trạng thái bật/tắt | `sudo ts entrance show` |
+| Tắt URL đăng nhập riêng (khi quên URL hoặc bị chặn) | `sudo ts entrance disable` |
 | Xem phiên bản | `ts version` |
+| Chạy migration cho database của panel | `sudo ts migrate` |
+| Gỡ cài đặt panel | `sudo ts uninstall` |
 | Trạng thái service | `sudo systemctl status tspanel` |
 | Khởi động lại panel | `sudo systemctl restart tspanel` |
 | Xem log service | `sudo journalctl -u tspanel -n 200 --no-pager` |
+| Xem log trực tiếp | `sudo journalctl -u tspanel -f` |
 
-Log của panel nằm trong `/www/server/tspanel/data/logs/` (`panel.log`, `error.log`).
+### 19.3 Vị trí file
+
+| Đường dẫn | Nội dung |
+| --- | --- |
+| `/www/server/tspanel/tspanel` | File chạy của panel |
+| `/www/server/tspanel/config.yaml` | Cấu hình: cổng, kết nối database, … |
+| `/www/server/tspanel/data/` | Dữ liệu panel. Log nằm trong `data/logs/` (`panel.log`, `error.log`), bản sao lưu database khi nâng cấp nằm trong `data/db-backups/` |
+| `/usr/local/bin/ts` | Lệnh quản trị |
+| `/etc/systemd/system/tspanel.service` | Service systemd |
+| `/www/server/` | Phần mềm cài từ panel |
+| `/www/wwwroot/` | Mã nguồn website |
+| `/www/wwwlogs/` | Log website |
+| `/www/backup/` | Bản sao lưu database và thư mục |
+
+**Đổi cổng panel:** dùng **Cài đặt → Chung → Cổng panel → Đổi cổng**. Hoặc sửa `listenAddr` trong `/www/server/tspanel/config.yaml` (ví dụ `listenAddr: ":9999"`), chạy `systemctl restart tspanel`, rồi mở cổng mới trên tường lửa.
 
 ---
 
 ## 20. Nâng cấp
 
-- Bấm **Cập nhật** ở thanh trên cùng của panel, hoặc
-- Chạy lại lệnh cài đặt trên máy chủ:
+Bấm **Cập nhật** ở thanh trên cùng của panel, hoặc chạy lại lệnh cài đặt trên máy chủ:
 
-  ```bash
-  curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash
-  ```
+```bash
+curl -fsSL https://raw.githubusercontent.com/techshield-tech/tsPanel/main/install.sh | sudo bash
+```
 
-Khi nâng cấp bằng script, cơ sở dữ liệu của panel và file chạy cũ được sao lưu trước. Nếu bản mới không khởi động được, script tự khôi phục bản cũ. Cấu hình, dữ liệu và cổng được giữ nguyên. Chi tiết xem [README](../README.md#nâng-cấp).
+Khi thấy `/www/server/tspanel/config.yaml`, script sẽ chuyển sang chế độ **nâng cấp**:
+
+1. Sao lưu database của panel bằng `pg_dump` (bỏ qua nếu dùng `--skip-db-backup`).
+2. Dừng service và sao lưu file chạy cũ thành `tspanel.bak`.
+3. Thay file chạy mới rồi khởi động lại.
+4. Nếu bản mới không chạy được, script **tự quay về** file chạy cũ và khôi phục database.
+
+Cấu hình, database và cổng được giữ nguyên. Để nâng lên một phiên bản cụ thể, thêm `--version X`. Muốn xem phiên bản đang chạy, dùng `ts version`.
+
+---
+
+## 21. Gỡ cài đặt
+
+> [!CAUTION]
+> Thư mục `/www` chứa website, log và bản sao lưu. Hãy sao lưu những gì cần giữ trước khi xoá.
+
+1. Gỡ các phần mềm đã cài qua panel (Nginx, MySQL, PHP, …) ngay trong **Kho ứng dụng**. Gỡ tsPanel không tự gỡ chúng.
+2. Gỡ panel bằng `sudo ts uninstall`, hoặc gỡ thủ công:
+
+   ```bash
+   sudo systemctl disable --now tspanel
+   sudo rm -f /etc/systemd/system/tspanel.service /usr/local/bin/ts
+   sudo systemctl daemon-reload
+   sudo rm -rf /www/server/tspanel
+   ```
+
+3. Nếu PostgreSQL do script cài và bạn muốn xoá database của panel:
+
+   ```bash
+   sudo -u postgres psql -c "DROP DATABASE IF EXISTS tspanel"
+   sudo -u postgres psql -c "DROP ROLE IF EXISTS tspanel"
+   ```
 
 ---
 
