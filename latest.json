@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.32","releasedAt":"2026-10-01T12:08:05Z","changelog":["fix(ui): show the panel version in the sidebar and the new MCP key in full","fix(deploy): reliable SSL for new domains, force HTTPS and real project URLs"]}
+{"latest":"0.1.0-beta.33","releasedAt":"2026-10-01T12:21:26Z","changelog":["fix(system): report the real server address instead of 0.0.0.0"]}
