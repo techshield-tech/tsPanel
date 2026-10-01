@@ -21,6 +21,17 @@
       "signature": "Ej+2KUVmiH3nxnEKgQoG7AGsXwuI0RM/eoorUQHLYpRrCXt4SFATz20I5GawxPjtOGsmg1D+xG0c+rI9fJMPAg==",
       "size": 24425315,
       "minGlibc": "2.31"
+    },
+    {
+      "id": "phpmyadmin",
+      "version": "5.2.3",
+      "os": "linux",
+      "arch": "amd64",
+      "url": "https://github.com/techshield-tech/tsPanel/releases/download/packages/phpmyadmin-5.2.3-linux-amd64.tar.gz",
+      "sha256": "b8ac6812535e47ed7d275712ce039f69a1d9cd2383cc1b70b213f5f303f075bf",
+      "signature": "CdJ5UZ7sTL+/oUjWqVZFFi2OSkssrw0SFZ48/AqJ7g5GNuk0T5fJ8H1ACykEhTJAHuuIK/GADfrLEMul/G3PDg==",
+      "size": 14515396,
+      "minGlibc": "2.31"
     }
   ]
 }
