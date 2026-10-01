@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.31","releasedAt":"2026-10-01T11:38:42Z","changelog":["feat(node): keep enrolled agent nodes valid permanently"]}
+{"latest":"0.1.0-beta.32","releasedAt":"2026-10-01T12:08:05Z","changelog":["fix(ui): show the panel version in the sidebar and the new MCP key in full","fix(deploy): reliable SSL for new domains, force HTTPS and real project URLs"]}
