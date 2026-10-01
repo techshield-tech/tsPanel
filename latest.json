@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.27","releasedAt":"2026-10-01T06:15:41Z","changelog":["fix(deploy): handle projects whose containers are gone","chore: remove third-party panel references from comments","feat(node): add tspanel-agent with gRPC/mTLS and plugin install on agent nodes"]}
+{"latest":"0.1.0-beta.28","releasedAt":"2026-10-01T06:32:19Z","changelog":["fix(deploy): show no memory limit for unlimited project containers"]}
