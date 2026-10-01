@@ -750,9 +750,8 @@ finish_fresh_install() {
     exit 1
   fi
 
-  local entrance entrance_state entrance_path entrance_line
+  local entrance entrance_path entrance_line
   entrance="$("$WRAPPER_PATH" entrance show 2>&1 || true)"
-  entrance_state="$(printf '%s\n' "$entrance" | sed -n 's/^entrance enforcement: //p' | head -1)"
   entrance_path="$(printf '%s\n' "$entrance" | sed -n 's/^entrance path: //p' | head -1)"
 
   local public_ip local_ip
@@ -761,16 +760,12 @@ finish_fresh_install() {
 
   entrance_line=""
   if [ -n "$entrance_path" ]; then
-    if [ "$entrance_state" = "enabled" ]; then
-      if [ -n "$public_ip" ]; then
-        entrance_line="https://${public_ip}:${PORT}${entrance_path}"
-      elif [ -n "$local_ip" ]; then
-        entrance_line="https://${local_ip}:${PORT}${entrance_path}"
-      else
-        entrance_line="$entrance_path"
-      fi
-    elif [ "$entrance_state" = "disabled" ]; then
-      entrance_line="${entrance_path} (not enforced; enable in Settings > Security)"
+    if [ -n "$public_ip" ]; then
+      entrance_line="https://${public_ip}:${PORT}${entrance_path}"
+    elif [ -n "$local_ip" ]; then
+      entrance_line="https://${local_ip}:${PORT}${entrance_path}"
+    else
+      entrance_line="$entrance_path"
     fi
   fi
 
@@ -784,7 +779,7 @@ finish_fresh_install() {
   printf 'Username:     admin\n'
   printf 'Password:     %s\n' "$admin_password"
   if [ -n "$entrance_line" ]; then
-    printf 'Entrance:     %s\n' "$entrance_line"
+    printf 'Entrance:     %s   (the only URL that opens the panel; save it)\n' "$entrance_line"
   fi
   printf '\nHandy commands:\n'
   printf '  systemctl status %s\n' "$SERVICE_NAME"
