@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.22","releasedAt":"2026-10-01T02:52:33Z","changelog":["ci(packages): run packages-all on pushes touching apps/packages","feat(waf): add OpenStreetMap attack map","feat(security): always enforce the security entrance","ci(packages): order packages-all matrix explicitly","feat(packages): add mysql, mariadb, redis builds and arm64 batch CI"]}
+{"latest":"0.1.0-beta.23","releasedAt":"2026-10-01T03:02:17Z","changelog":["fix(waf): send origin referer for OpenStreetMap tiles"]}
