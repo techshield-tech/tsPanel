@@ -23,6 +23,17 @@
       "minGlibc": "2.31"
     },
     {
+      "id": "php-8.3",
+      "version": "8.3.35",
+      "os": "linux",
+      "arch": "amd64",
+      "url": "https://github.com/techshield-tech/tsPanel/releases/download/packages/php-8.3-8.3.35-linux-amd64.tar.gz",
+      "sha256": "df32c0b6e2d11662746af1e6861722fd71e84ffc7dd0938ecc96af72d3db7c2b",
+      "signature": "bJorkyP1S1YVpElWBXR2HLqRad307slY0l2nu1ttzrhCRrjO69dBwwpXpPqymuVo4Mp0oFYSDoA1cj47q7u9Ag==",
+      "size": 64466016,
+      "minGlibc": "2.31"
+    },
+    {
       "id": "phpmyadmin",
       "version": "5.2.3",
       "os": "linux",
