@@ -38,19 +38,11 @@ Usage: install.sh [options]
   --db-url URL      Use an existing PostgreSQL database (skip local install)
   --no-firewall     Do not touch ufw/firewalld
   --skip-db-backup  On upgrade, do not pg_dump the panel database first
-  --agent           Install as an agent node (no UI/login; connects to a master
-                    panel). Requires --master and --enroll on a fresh install
-  --master URL      Master panel URL the agent connects to (https://...)
-  --enroll TOKEN    One-time enroll token issued by the master panel. On an
-                    existing agent this re-enrolls it (rotates its secret)
-  --master-fp FP    Pin the master certificate by hex sha256 SPKI fingerprint
   -y                Assume yes / non-interactive
   -h, --help        Show this help
 
 Environment variables TSPANEL_VERSION, TSPANEL_PORT, TSPANEL_REPO,
-TSPANEL_TARBALL and TSPANEL_DATABASE_URL are equivalent to the flags above;
-TSPANEL_AGENT_MASTER_URL, TSPANEL_AGENT_ENROLL_TOKEN and
-TSPANEL_AGENT_MASTER_FP match --master, --enroll and --master-fp.
+TSPANEL_TARBALL and TSPANEL_DATABASE_URL are equivalent to the flags above.
 TSPANEL_PUBLIC_KEY overrides the embedded ed25519 release signing key (base64).
 EOF
 }
@@ -95,25 +87,6 @@ parse_args() {
         SKIP_DB_BACKUP=1
         shift
         ;;
-      --agent)
-        AGENT_MODE=1
-        shift
-        ;;
-      --master)
-        [ "$#" -ge 2 ] || { log_err "option $1 requires a value"; exit 1; }
-        AGENT_MASTER="$2"
-        shift 2
-        ;;
-      --enroll)
-        [ "$#" -ge 2 ] || { log_err "option $1 requires a value"; exit 1; }
-        AGENT_ENROLL="$2"
-        shift 2
-        ;;
-      --master-fp)
-        [ "$#" -ge 2 ] || { log_err "option $1 requires a value"; exit 1; }
-        AGENT_FP="$2"
-        shift 2
-        ;;
       -y)
         ASSUME_YES=1
         shift
@@ -133,52 +106,6 @@ parse_args() {
 
 cleanup() {
   rm -rf "$TMP_DIR"
-}
-
-validate_agent_args() {
-  if [ "$AGENT_MODE" != "1" ]; then
-    if [ -n "$AGENT_MASTER" ] || [ -n "$AGENT_ENROLL" ] || [ -n "$AGENT_FP" ]; then
-      log_err "--master, --enroll and --master-fp require --agent"
-      exit 1
-    fi
-    return 0
-  fi
-  if [ -n "$AGENT_ENROLL" ] && [ -z "$AGENT_MASTER" ]; then
-    log_err "--enroll requires --master"
-    exit 1
-  fi
-  if [ -n "$AGENT_MASTER" ] && [ -z "$AGENT_ENROLL" ]; then
-    log_err "--master requires --enroll"
-    exit 1
-  fi
-}
-
-config_agent_enabled() {
-  awk '
-    /^agent:/ { in_a = 1; next }
-    in_a && /^[^[:space:]#]/ { in_a = 0 }
-    in_a && /^[[:space:]]+enabled:[[:space:]]*"?true/ { found = 1 }
-    END { exit found ? 0 : 1 }
-  ' "$1" 2>/dev/null
-}
-
-resolve_agent_state() {
-  IS_AGENT=0
-  if [ "$IS_UPGRADE" = "1" ]; then
-    if [ -f "$CONFIG_PATH" ] && config_agent_enabled "$CONFIG_PATH"; then
-      IS_AGENT=1
-    elif [ "$AGENT_MODE" = "1" ]; then
-      log_err "this host already runs tsPanel in panel mode; refusing to convert it to an agent"
-      log_err "uninstall it first (ts uninstall) and install the agent on a clean host"
-      exit 1
-    fi
-  elif [ "$AGENT_MODE" = "1" ]; then
-    IS_AGENT=1
-    if [ -z "$AGENT_MASTER" ] || [ -z "$AGENT_ENROLL" ]; then
-      log_err "a fresh agent install requires --master URL and --enroll TOKEN (create the node in the master panel to get them)"
-      exit 1
-    fi
-  fi
 }
 
 confirm_or_exit() {
@@ -622,13 +549,13 @@ yaml_escape() {
 }
 
 write_fresh_config() {
-  local port="$1" data_dir="$2" update_url="$3" db_url="$4" out="$5" listen_host="${6:-}"
+  local port="$1" data_dir="$2" update_url="$3" db_url="$4" out="$5"
   local e_data_dir e_update_url e_db_url
   e_data_dir="$(yaml_escape "$data_dir")"
   e_update_url="$(yaml_escape "$update_url")"
   e_db_url="$(yaml_escape "$db_url")"
   cat > "$out" <<EOF
-listenAddr: "${listen_host}:${port}"
+listenAddr: ":${port}"
 basePath: "/"
 dataDir: "${e_data_dir}"
 uiDir: ""
@@ -715,7 +642,7 @@ if [ "\$#" -ge 1 ]; then
       shift
       exec bash "${INSTALL_DIR}/uninstall.sh" "\$@"
       ;;
-    serve|migrate|reset-password|entrance|agent)
+    serve|migrate|reset-password|entrance)
       exec "\$BIN" "\$@" --config "\$CFG"
       ;;
   esac
@@ -771,81 +698,6 @@ http_probe() {
   return 1
 }
 
-agent_health_body() {
-  local port="$1" base url
-  base="$(read_config_scalar "$CONFIG_PATH" basePath)"
-  base="${base%/}"
-  url="http://127.0.0.1:${port}${base}/api/v1/health"
-  if [ -n "$CURL_BIN" ]; then
-    curl -s --max-time 2 "$url" 2>/dev/null
-  elif [ -n "$WGET_BIN" ]; then
-    wget -q -O - --timeout=2 --tries=1 "$url" 2>/dev/null
-  else
-    return 1
-  fi
-}
-
-agent_health_ok() {
-  local body
-  body="$(agent_health_body "$1")" || return 1
-  case "$body" in
-    *'"status"'*) return 0 ;;
-  esac
-  return 1
-}
-
-agent_connected() {
-  local body
-  body="$(agent_health_body "$1")" || return 1
-  printf '%s' "$body" | grep -Eq '"connected"[[:space:]]*:[[:space:]]*true'
-}
-
-wait_agent_connected() {
-  local port="$1" timeout="${2:-60}" i
-  for ((i = 0; i < timeout; i += 2)); do
-    if agent_connected "$port"; then
-      return 0
-    fi
-    systemctl is-active --quiet "$SERVICE_NAME" || return 1
-    sleep 2
-  done
-  return 1
-}
-
-enroll_agent() {
-  local fp_args=()
-  [ -n "$AGENT_FP" ] && fp_args=(--fingerprint "$AGENT_FP")
-  log_info "enrolling this host with the master panel at $AGENT_MASTER"
-  "$INSTALL_DIR/tspanel" agent enroll --config "$CONFIG_PATH" --master "$AGENT_MASTER" --token "$AGENT_ENROLL" ${fp_args[@]+"${fp_args[@]}"}
-}
-
-agent_status_field() {
-  "$INSTALL_DIR/tspanel" agent status --config "$CONFIG_PATH" 2>/dev/null | sed -n "s/^$1:[[:space:]]*//p" | head -1
-}
-
-print_agent_summary() {
-  local title="$1" port="$2" master enrolled node_id connected=0
-  if wait_agent_connected "$port" 60; then
-    connected=1
-  fi
-  master="$(agent_status_field master)"
-  enrolled="$(agent_status_field enrolled)"
-  node_id="$(printf '%s' "$enrolled" | sed -n 's/.*node #\([0-9][0-9]*\).*/\1/p')"
-  printf '\n%s=== %s ===%s\n' "$C_GREEN" "$title" "$C_RESET"
-  printf 'Master:       %s\n' "${master:-unknown}"
-  printf 'Node ID:      %s\n' "${node_id:-unknown}"
-  if [ "$connected" = "1" ]; then
-    printf 'Status:       connected to the master\n'
-  else
-    log_warn "the agent is running but has not connected to the master within 60s"
-    log_warn "check that the master URL is reachable from this host: ts agent status; journalctl -u $SERVICE_NAME -f"
-  fi
-  printf '\nHandy commands:\n'
-  printf '  ts agent status\n'
-  printf '  systemctl status %s\n' "$SERVICE_NAME"
-  printf '  journalctl -u %s -f\n' "$SERVICE_NAME"
-}
-
 wait_ready() {
   local port="$1"
   local timeout="${2:-60}"
@@ -859,11 +711,7 @@ wait_ready() {
     if [ "$current" != "$baseline" ]; then
       return 1
     fi
-    if [ "$IS_AGENT" = "1" ]; then
-      if agent_health_ok "$port"; then
-        return 0
-      fi
-    elif http_probe "127.0.0.1" "$port"; then
+    if http_probe "127.0.0.1" "$port"; then
       return 0
     fi
     sleep 1
@@ -873,14 +721,17 @@ wait_ready() {
 
 setup_firewall() {
   local port="$1"
-  if [ "$NO_FIREWALL" = "1" ] || [ "$IS_AGENT" = "1" ]; then
+  if [ "$NO_FIREWALL" = "1" ]; then
     return 0
   fi
+  local agent_port=8889
   if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -qi '^Status: active'; then
     ufw allow "${port}/tcp" || true
+    ufw allow "${agent_port}/tcp" || true
   fi
   if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
     firewall-cmd --permanent --add-port="${port}/tcp"
+    firewall-cmd --permanent --add-port="${agent_port}/tcp"
     firewall-cmd --reload
   fi
 }
@@ -1127,15 +978,9 @@ main() {
   ASSUME_YES=0
   INSECURE=0
   SKIP_DB_BACKUP=0
-  AGENT_MODE=0
-  AGENT_MASTER="${TSPANEL_AGENT_MASTER_URL:-}"
-  AGENT_ENROLL="${TSPANEL_AGENT_ENROLL_TOKEN:-}"
-  AGENT_FP="${TSPANEL_AGENT_MASTER_FP:-}"
-  IS_AGENT=0
 
   setup_colors
   parse_args "$@"
-  validate_agent_args
 
   TMP_DIR="$(mktemp -d)"
   trap cleanup EXIT
@@ -1144,7 +989,6 @@ main() {
   resolve_source
   extract_tarball
   determine_mode
-  resolve_agent_state
 
   if [ "$IS_UPGRADE" = "1" ]; then
     log_info "existing installation detected at $INSTALL_DIR; performing an upgrade"
@@ -1183,19 +1027,6 @@ main() {
     rewrite_update_check_url_if_stale "$CONFIG_PATH" "https://raw.githubusercontent.com/$REPO/main/latest.json"
 
     install_binary
-
-    if [ "$IS_AGENT" = "1" ] && [ -n "$AGENT_ENROLL" ]; then
-      if ! enroll_agent; then
-        log_err "re-enrolling failed; restoring the previous binary and restarting the agent"
-        log_err "request a fresh enroll token from the master panel and retry"
-        if [ "$backup_made" = "1" ]; then
-          cp "$INSTALL_DIR/tspanel.bak" "$INSTALL_DIR/tspanel"
-          chmod 0755 "$INSTALL_DIR/tspanel"
-        fi
-        systemctl start "$SERVICE_NAME" 2>/dev/null || true
-        exit 1
-      fi
-    fi
   else
     mark_install_started
 
@@ -1206,22 +1037,11 @@ main() {
     fi
 
     UPDATE_CHECK_URL="https://raw.githubusercontent.com/$REPO/main/latest.json"
-    local listen_host=""
-    [ "$IS_AGENT" = "1" ] && listen_host="127.0.0.1"
-    write_fresh_config "$PORT" "$INSTALL_DIR/data" "$UPDATE_CHECK_URL" "$DATABASE_URL" "$CONFIG_PATH" "$listen_host"
+    write_fresh_config "$PORT" "$INSTALL_DIR/data" "$UPDATE_CHECK_URL" "$DATABASE_URL" "$CONFIG_PATH"
     chmod 0600 "$CONFIG_PATH"
     cp "$EXTRACT_DIR/tspanel/config.example.yaml" "$INSTALL_DIR/config.example.yaml"
 
     install_binary
-
-    if [ "$IS_AGENT" = "1" ]; then
-      if ! enroll_agent; then
-        log_err "enrolling with the master failed; the agent service was not started"
-        log_err "check that the master URL is reachable from this host and the token is unused and not expired"
-        log_err "request a new enroll token from the master panel, then rerun the install command (it resumes safely)"
-        exit 1
-      fi
-    fi
   fi
 
   warn_if_foreign_wrapper_target
@@ -1263,17 +1083,10 @@ main() {
 
   if [ "$IS_UPGRADE" = "1" ]; then
     mark_install_complete
-    if [ "$IS_AGENT" = "1" ]; then
-      print_agent_summary "tsPanel agent upgraded (${old_version} -> ${NEW_VERSION})" "$target_port"
-    else
-      print_upgrade_summary "$old_version" "$NEW_VERSION"
-    fi
+    print_upgrade_summary "$old_version" "$NEW_VERSION"
     if [ -n "$DB_BACKUP_FILE" ]; then
       printf 'DB backup:   %s\n' "$DB_BACKUP_FILE"
     fi
-  elif [ "$IS_AGENT" = "1" ]; then
-    mark_install_complete
-    print_agent_summary "tsPanel agent installed" "$target_port"
   else
     finish_fresh_install
     mark_install_complete
