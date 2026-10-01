@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.34","releasedAt":"2026-10-01T13:30:12Z","changelog":["fix(ui): give the sidebar version its own row so it is not truncated","fix(deploy): use https in project URLs only once the certificate is issued","fix(settings): report the system timezone until one is chosen","fix(system): list only real storage filesystems as disks"]}
+{"latest":"0.1.0-beta.35","releasedAt":"2026-10-01T13:43:15Z","changelog":["fix(node): keep SSH command output when stdout and stderr share a buffer"]}
