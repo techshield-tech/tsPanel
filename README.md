@@ -145,10 +145,10 @@ Nếu file `.sha256` nằm cạnh tarball, script sẽ tự kiểm tra checksum.
 
 Panel cài được các phần mềm sau: Nginx (OpenResty), MySQL, MariaDB, PHP 8.2 / 8.3 / 8.4, Redis, Pure-FTPd và phpMyAdmin.
 
-- Đây là các **gói dựng sẵn**, tải từ mục Releases (tag `packages`). Máy chủ không phải biên dịch gì cả.
+- Đây là các **gói dựng sẵn**, tải từ `https://dl.mmoall.com`. Máy chủ không phải biên dịch gì cả.
 - Trước khi cài, panel kiểm tra SHA-256 và chữ ký ed25519 của từng gói.
 - Các gói cần glibc 2.31 trở lên.
-- Danh sách gói hiện có nằm trong [`index.json`](index.json).
+- Danh sách gói hiện có nằm trong [`index.json`](https://dl.mmoall.com/index.json).
 
 WAF (tường lửa ứng dụng web) có sẵn trong panel và cần Nginx/OpenResty để hoạt động.
 
