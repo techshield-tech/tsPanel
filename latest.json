@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.42","releasedAt":"2026-10-02T14:35:49Z","changelog":["fix(logs): let the audit and soft log lists scroll below lg","fix(notifications): stack toasts top-right below the header and scroll the bell list"]}
+{"latest":"0.1.0-beta.43","releasedAt":"2026-10-02T14:54:33Z","changelog":["build: obfuscate the agent and tswafd binaries with garble on release"]}
