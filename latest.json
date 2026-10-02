@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.41","releasedAt":"2026-10-02T14:04:40Z","changelog":["fix(apps): track onboarding form initialisation in state, not a ref","feat(layout): move version, update and restart into the top header","fix(layout): stop the header breadcrumb from blanking the app on navigation"]}
+{"latest":"0.1.0-beta.42","releasedAt":"2026-10-02T14:35:49Z","changelog":["fix(logs): let the audit and soft log lists scroll below lg","fix(notifications): stack toasts top-right below the header and scroll the bell list"]}
