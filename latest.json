@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.43","releasedAt":"2026-10-02T14:54:33Z","changelog":["build: obfuscate the agent and tswafd binaries with garble on release"]}
+{"latest":"0.1.0-beta.44","releasedAt":"2026-10-02T15:20:21Z","changelog":["release(tswaf): bump to 2.1.1 to publish the garbled WAF build"]}
