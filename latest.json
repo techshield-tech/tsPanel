@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.39","releasedAt":"2026-10-02T13:12:34Z","changelog":["fix(settings): stop theme mode cards from overlapping","feat(node): test SSH before adding a node and accept host:port targets"]}
+{"latest":"0.1.0-beta.40","releasedAt":"2026-10-02T13:35:44Z","changelog":["feat(layout): move notifications and task queue into a fixed top header"]}
