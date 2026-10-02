@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.40","releasedAt":"2026-10-02T13:35:44Z","changelog":["feat(layout): move notifications and task queue into a fixed top header"]}
+{"latest":"0.1.0-beta.41","releasedAt":"2026-10-02T14:04:40Z","changelog":["fix(apps): track onboarding form initialisation in state, not a ref","feat(layout): move version, update and restart into the top header","fix(layout): stop the header breadcrumb from blanking the app on navigation"]}
