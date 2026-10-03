@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.46","releasedAt":"2026-10-03T02:07:50Z","changelog":["fix(waf): list proxies, projects and deploys on the WAF website page"]}
+{"latest":"0.1.0-beta.47","releasedAt":"2026-10-03T02:20:31Z","changelog":["feat(settings): refuse panel access by IP once a panel domain is set"]}
