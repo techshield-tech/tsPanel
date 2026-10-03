@@ -642,7 +642,7 @@ if [ "\$#" -ge 1 ]; then
       shift
       exec bash "${INSTALL_DIR}/uninstall.sh" "\$@"
       ;;
-    serve|migrate|reset-password|entrance)
+    serve|migrate|reset-password|entrance|domain)
       exec "\$BIN" "\$@" --config "\$CFG"
       ;;
   esac
@@ -761,9 +761,14 @@ finish_fresh_install() {
   public_ip="$(curl -s4 --max-time 3 https://ifconfig.me 2>/dev/null || true)"
   local_ip="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 
+  local panel_domain
+  panel_domain="$("$WRAPPER_PATH" domain show 2>/dev/null | sed -n 's/^panel domain: //p' | head -1 || true)"
+
   entrance_line=""
   if [ -n "$entrance_path" ]; then
-    if [ -n "$public_ip" ]; then
+    if [ -n "$panel_domain" ]; then
+      entrance_line="https://${panel_domain}:${PORT}${entrance_path}"
+    elif [ -n "$public_ip" ]; then
       entrance_line="https://${public_ip}:${PORT}${entrance_path}"
     elif [ -n "$local_ip" ]; then
       entrance_line="https://${local_ip}:${PORT}${entrance_path}"
