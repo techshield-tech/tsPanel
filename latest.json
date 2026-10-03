@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.50","releasedAt":"2026-10-03T03:08:09Z","changelog":["fix(panel): send plain-HTTP redirects to the panel domain on the TLS port"]}
+{"latest":"0.1.0-beta.51","releasedAt":"2026-10-03T09:14:06Z","changelog":["feat(deploy): bind each domain to a compose service"]}
