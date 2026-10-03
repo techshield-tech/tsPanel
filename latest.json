@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.45","releasedAt":"2026-10-03T01:38:31Z","changelog":["fix(ui): address Lighthouse accessibility findings"]}
+{"latest":"0.1.0-beta.46","releasedAt":"2026-10-03T02:07:50Z","changelog":["fix(waf): list proxies, projects and deploys on the WAF website page"]}
