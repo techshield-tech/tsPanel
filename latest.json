@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.47","releasedAt":"2026-10-03T02:20:31Z","changelog":["feat(settings): refuse panel access by IP once a panel domain is set"]}
+{"latest":"0.1.0-beta.48","releasedAt":"2026-10-03T02:47:34Z","changelog":["feat(logs): scope the panel logs screen to the selected node"]}
