@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.48","releasedAt":"2026-10-03T02:47:34Z","changelog":["feat(logs): scope the panel logs screen to the selected node"]}
+{"latest":"0.1.0-beta.49","releasedAt":"2026-10-03T02:59:27Z","changelog":["fix(waf): strip NUL bytes from ingested stats so one bad batch cannot block the agent outbox"]}
