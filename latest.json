@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.53","releasedAt":"2026-10-04T02:00:46Z","changelog":["feat(deploy): set HTTPS and the HTTP redirect per domain"]}
+{"latest":"0.1.0-beta.54","releasedAt":"2026-10-04T02:48:21Z","changelog":["chore(docs): track Lighthouse reports for the home, projects and general settings pages","feat(apps): list the WAF plugin in the app store","feat(deploy): add a deployment guide tab","feat(settings): issue and auto-renew the panel certificate with Let's Encrypt"]}
