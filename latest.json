@@ -1,1 +1,1 @@
-{"latest":"0.1.0-beta.51","releasedAt":"2026-10-03T09:14:06Z","changelog":["feat(deploy): bind each domain to a compose service"]}
+{"latest":"0.1.0-beta.52","releasedAt":"2026-10-04T01:32:28Z","changelog":["feat(deploy): add domains through a dialog with per-domain DNS records","release(tswaf): bump to 2.1.2 to publish the allowed-methods fix","fix(waf): allow PUT, PATCH and DELETE through CRS and fill the block page request id"]}
